@@ -57,6 +57,7 @@ type runningContainer struct {
 	doneCh chan error
 }
 
+// Guest represents the guest instance (i.e. the code that runs inside the virtual machine.)
 type Guest struct {
 	guestapi.UnimplementedGuestAPIServer
 

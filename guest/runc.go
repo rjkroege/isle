@@ -403,6 +403,8 @@ var devCharEntries = []devEntry{
 
 var ErrUnknownContainer = errors.New("unknown container")
 
+// bootContainer starts the desired container as the inner-guest. Remember that this code
+// is running in the outer-guest.
 func (g *Guest) bootContainer(
 	ctx context.Context,
 	name string,
@@ -807,6 +809,7 @@ func (g *Guest) isleExists(name string) bool {
 	return err == nil && fi.IsDir()
 }
 
+// SetupIsle loads (?) the guest image.
 func (g *Guest) SetupIsle(
 	ctx context.Context,
 	name string,
@@ -862,6 +865,9 @@ func (g *Guest) setupContainer(ctx context.Context, task containerd.Task, bundle
 		))
 	}
 
+	// TODO(rjk): This adds authentication to the container. It assumes that presence of
+	// Debian/Ubuntu style password management. Maybe there needs to be a way to
+	// configure this?
 	setup = append(setup,
 		"mkdir -p /etc/sudoers.d",
 		"echo '%user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/00-%user",
@@ -914,6 +920,7 @@ func (g *Guest) setupContainer(ctx context.Context, task containerd.Task, bundle
 	return nil
 }
 
+// StartContainer launches the inner-guest container.
 func (g *Guest) StartContainer(
 	ctx context.Context,
 	info *ContainerInfo,

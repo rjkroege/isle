@@ -28,7 +28,11 @@ type Release struct {
 	Assets  []ReleaseAsset `json:"assets"`
 }
 
+// Latest fetches a *Release manifest for the given org and repo.
+// If version is empty, org is "lab47" and repo is "isle".
 func Latest(org, repo string) (*Release, error) {
+	// TODO(rjk): This would seem to limit how we can have different
+	// containers? Maybe it needs to be more general?
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", org, repo)
 
 	req, err := http.NewRequest("GET", url, nil)

@@ -267,6 +267,7 @@ func main() {
 
 var assetSuffix = "-" + runtime.GOARCH + ".tar.gz"
 
+// setupStateDir (maybe?) creates the ~/Library/Application Support/isle and populates it.
 func setupStateDir(log hclog.Logger, stateDir string) error {
 	var neededFiles = map[string]struct{}{
 		"initrd":  {},

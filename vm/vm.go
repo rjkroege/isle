@@ -71,6 +71,8 @@ func systemMemory() (uint64, error) {
 	return unix.SysctlUint64("hw.memsize")
 }
 
+// Run launches a VM. By this point, we will have downloaded the image data and have
+// populated the ~/Library/Application Support/isle directory with an os.fs, initrd and vmlinux.
 func (v *VM) Run(ctx context.Context, stateCh chan State, sigC chan os.Signal) error {
 	u, err := user.Current()
 	if err != nil {
@@ -1045,6 +1047,8 @@ func (v *VM) forwardPort(port int, key string, l net.Listener, sess *yamux.Sessi
 	}
 }
 
+// mountLinux tries to use SMB to mount the Linux VM's exported state. Runs
+// in in the host (VM) code.
 func (v *VM) mountLinux(ip string) {
 	// lazy way to let smbd boot up first
 	time.Sleep(time.Second)
