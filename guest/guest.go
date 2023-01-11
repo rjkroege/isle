@@ -617,7 +617,7 @@ func (g *Guest) HandleSSH(ctx context.Context, c net.Conn) {
 		sshServ.ChannelHandlers[k] = v
 	}
 
-	sshServ.ChannelHandlers["direct-tcpip"] = g.DirectTCPIPHandler
+	sshServ.ChannelHandlers["direct-tcpip"] = ssh.DirectTCPIPHandler
 
 	sshServ.SubsystemHandlers = map[string]ssh.SubsystemHandler{}
 	for k, v := range ssh.DefaultSubsystemHandlers {
