@@ -232,6 +232,7 @@ func (v *VM) Run(ctx context.Context, stateCh chan State, sigC chan os.Signal) e
 		entropyConfig,
 	})
 
+	// Add os.fs.
 	diskImageAttachment, err := vz.NewDiskImageStorageDeviceAttachment(
 		diskPath,
 		true,
@@ -244,6 +245,7 @@ func (v *VM) Run(ctx context.Context, stateCh chan State, sigC chan os.Signal) e
 		storageDeviceConfig,
 	}
 
+	// Add data.fs iff it exists. Seems unlikely that it wouldn't exist?
 	if dataPath != "" {
 		bs, err := bytesize.Parse(v.Config.DataSize)
 		if err != nil {
@@ -269,6 +271,7 @@ func (v *VM) Run(ctx context.Context, stateCh chan State, sigC chan os.Signal) e
 				f.Close()
 			}
 		} else {
+			// Make an empty one.
 			f, err := os.Create(dataPath)
 			if err != nil {
 				panic(err)
@@ -284,6 +287,7 @@ func (v *VM) Run(ctx context.Context, stateCh chan State, sigC chan os.Signal) e
 			f.Close()
 		}
 
+		// If there was no data.fs, we have made one. And added it.
 		diskImageAttachment, err := vz.NewDiskImageStorageDeviceAttachment(
 			dataPath,
 			false,
@@ -296,6 +300,7 @@ func (v *VM) Run(ctx context.Context, stateCh chan State, sigC chan os.Signal) e
 			vz.NewVirtioBlockDeviceConfiguration(diskImageAttachment))
 	}
 
+	// Add a user.fs (aka home dirs)
 	if userPath != "" {
 		bs, err := bytesize.Parse(v.Config.UserSize)
 		if err != nil {
@@ -861,7 +866,9 @@ func (v *VM) RunOnMac(s guestapi.HostAPI_RunOnMacServer) error {
 
 func (v *VM) Running(ctx context.Context, req *guestapi.RunningReq) (*guestapi.RunningResp, error) {
 	v.mountOnce.Do(func() {
-		v.mountLinux(req.Ip)
+		// TODO(rjk): Be able to control use of SMB somehow.
+		v.L.Info("v.mountOnce.Do, this is where I  would do the SMB mount, but suppressing")
+		// v.mountLinux(req.Ip)
 	})
 
 	return &guestapi.RunningResp{}, nil

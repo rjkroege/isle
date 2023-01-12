@@ -37,6 +37,8 @@ import (
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
+// I believe that this file is partially vendored out of https://github.com/opencontainers/runc
+
 const basePath = "/data/containers"
 
 var perms = []string{
@@ -262,6 +264,7 @@ type ContainerInfo struct {
 	OCIConfig *v1.Config
 }
 
+// bundlePath is the container definition?
 func (g *Guest) unpackImg(
 	ctx context.Context,
 	img name.Reference,
@@ -269,6 +272,7 @@ func (g *Guest) unpackImg(
 	status io.Writer,
 	width int,
 ) (*v1.Config, error) {
+fmt.Println("unpackImg")
 	rimg, err := remote.Image(img,
 		remote.WithPlatform(v1.Platform{
 			Architecture: runtime.GOARCH,

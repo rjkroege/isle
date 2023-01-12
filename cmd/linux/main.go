@@ -98,6 +98,9 @@ func main() {
 		err      error
 	)
 
+log.Warn("Hello")
+
+
 	if *fStateDir != "" {
 		stateDir, err = filepath.Abs(*fStateDir)
 		if err != nil {
@@ -162,6 +165,8 @@ func main() {
 		return
 	}
 
+	// is this where we build the state dir? I think so.
+	fmt.Println("setupStateDir would get called here", stateDir)
 	err = setupStateDir(log, stateDir)
 	if err != nil {
 		log.Error("error setting up state", "error", err)
@@ -245,6 +250,8 @@ func main() {
 
 	ioutil.WriteFile(filepath.Join(stateDir, "recent"), []byte(*fName+"\n"), 0644)
 
+	fmt.Println("named", named.String())
+
 	c := &isle.CLI{
 		L:       log,
 		Path:    path,
@@ -283,10 +290,14 @@ func setupStateDir(log hclog.Logger, stateDir string) error {
 		}
 	}
 
+	fmt.Println("setupStateDir before len", Version)
 	if len(neededFiles) == 0 {
 		if Version == "unknown" {
 			return nil
 		}
+
+		fmt.Println("setupStateDir before version check")
+
 
 		data, err := ioutil.ReadFile(filepath.Join(stateDir, "version"))
 		curVersion := strings.TrimSpace(string(data))
@@ -299,17 +310,20 @@ func setupStateDir(log hclog.Logger, stateDir string) error {
 		log.Warn("current version of state dir does not match CLI, switching version",
 			"current", curVersion, "expected", Version)
 	}
+	fmt.Println("setupStateDir after len")
 
 	os.MkdirAll(stateDir, 0755)
 
+	log.Warn("trying to use cached os bundle", "Version", Version, "assetSuffix", assetSuffix)
 	if cacheDir := os.Getenv("ISLE_CACHE_DIR"); cacheDir != "" {
 		name := "os-" + Version + assetSuffix
 
 		path := filepath.Join(cacheDir, name)
+		log.Warn("trying to use cached os bundle", "path", path)
 
 		f, err := os.Open(path)
 		if err == nil {
-			log.Info("using cached os bundle", "path", path)
+			log.Warn("using cached os bundle", "path", path)
 			defer f.Close()
 
 			ioutil.WriteFile(filepath.Join(stateDir, "version"), []byte(Version), 0644)
@@ -321,6 +335,7 @@ func setupStateDir(log hclog.Logger, stateDir string) error {
 			return ghrelease.Unpack(f, size, name, stateDir)
 		}
 	}
+	fmt.Println("setupStateDir after cacheDir")
 
 	var rel *ghrelease.Release
 
@@ -438,6 +453,7 @@ func startVM(log hclog.Logger, stateDir, configPath, pidPath string) {
 	errCh := make(chan error, 1)
 	stateCh := make(chan vm.State, 1)
 
+// By this point, I will have installed a virtual machine image.
 	go func() {
 		defer os.Remove(pidPath)
 		errCh <- v.Run(ctx, stateCh, sig)
