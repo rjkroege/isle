@@ -173,6 +173,7 @@ func (g *Guest) oneAndOnlyIsle() string {
 	return entries[0].Name()
 }
 
+// Container fires up a container?
 func (g *Guest) Container(ctx context.Context, info *ContainerInfo) (string, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

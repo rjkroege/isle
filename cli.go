@@ -23,6 +23,7 @@ import (
 )
 
 type CLI struct {
+	// Name of this VM.
 	Name    string
 	Image   string
 	Dir     string
@@ -31,6 +32,8 @@ type CLI struct {
 	Console bool
 
 	L    hclog.Logger
+
+	// Path to the VM's control socket.
 	Path string
 }
 

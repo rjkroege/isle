@@ -362,6 +362,7 @@ func (g *Guest) handleSSH(ctx context.Context, s ssh.Session, l *yamux.Session) 
 		}
 	}
 
+	// TODO(rjk): Perhaps this is where additional auth date would need to be added for GCR.
 	cinfo := ContainerInfo{
 		Name:    info.Name,
 		Img:     imgref,
