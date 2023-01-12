@@ -370,12 +370,28 @@ func (g *Guest) handleSSH(ctx context.Context, s ssh.Session, l *yamux.Session) 
 		Session: l,
 	}
 
+	// Perhaps it's racy.
 	id, err := g.Container(ctx, &cinfo)
 	if err != nil {
-		g.L.Error("error establishing container", "error", err)
-		fmt.Fprintf(s, "error establishing container: %s\n", err)
-		s.Exit(1)
-		return
+		g.L.Error("error establishing container on 0th attempt", "error", err)
+	}
+
+	// Maybe try again because the guest doesn't yet have the correct time.
+	waitings := []time.Duration{500 * time.Millisecond, 3 * time.Second}
+	for i, td := range waitings {
+		timer := time.NewTimer(td)
+		<-timer.C
+	
+		id, err = g.Container(ctx, &cinfo)
+		if err != nil {
+			g.L.Error("error establishing container", "attempt", i+1, "error", err)
+			
+			if i == len(waitings) - 1 {
+				g.L.Error("giving up, too many failed attempts")
+				s.Exit(1)
+				return
+			}
+		}
 	}
 
 	if info.Dir != "" {
