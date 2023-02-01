@@ -1,0 +1,22 @@
+// Basics
+Edit X:isle/\+Errors: 1,$d
+X:isle/.*\.go: w
+
+make
+
+# makes the isle-guest and such.
+make binaries
+
+# And then:
+# inside... build the guest os.
+# TODO(rjk): Some kind of self-hosting.
+# make release
+
+./bin/linux --state-dir $home/wrks/islestate -i debian:stable-slim --as-root
+
+# My first (Debian) image.
+./bin/linux --state-dir $home/wrks/islestate -i ghcr.io/rjkroege/debslim
+# Run it
+./bin/linux --state-dir $home/wrks/islestate 
+
+./bin/linux --state-dir $home/wrks/islestate --stop && rm -rf $home/wrks/islestate/*

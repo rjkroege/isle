@@ -85,6 +85,14 @@ sudo rm -f "$WD"/release/os.fs || exit 1
 sudo mksquashfs "$WD/$ROOT" "$WD"/release/os.fs -comp xz || exit 1
 
 # Move release into cwd so that we can tar it up.
-sudo mv "$WD"/release . || exit 1
+# Doesn't have perms.
+# sudo mv "$WD"/release . || exit 1
 
-# TODO(rjk): Do something to fix up the naming.
+# This is the tar that came from the Makefile.
+sudo tar -C "$WD"/release -czf os-unknown-arm64.tar.gz .
+
+# TODO(rjk): Clean this up some more.
+# TODO(rjk): Put the tar file straight into the cache directory
+
+# TODO(rjk): Do something to fix up the naming. As in: it should be right
+# for different platforms etc.
