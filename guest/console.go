@@ -17,6 +17,7 @@ import (
 	"github.com/lab47/isle/pkg/ssh"
 )
 
+// consoleCommand defines the entry point needed for a console command.
 type consoleCommand interface {
 	Run(ctx context.Context, g *Guest, w io.Writer) int
 }
@@ -117,6 +118,7 @@ func (g *Guest) runCommand(ctx context.Context, s ssh.Session, parts []string) {
 	}
 }
 
+// Implements the delete command in the isle console.
 type deleteCommand struct {
 	Id string `arg:"positional"`
 }

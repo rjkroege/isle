@@ -57,7 +57,8 @@ type runningContainer struct {
 	doneCh chan error
 }
 
-// Guest represents the guest instance (i.e. the code that runs inside the virtual machine.)
+// Guest represents the guest instance (i.e. the code that runs inside
+// the virtual machine.)
 type Guest struct {
 	guestapi.UnimplementedGuestAPIServer
 
@@ -272,10 +273,15 @@ func (g *Guest) hasGroup(info *ContainerInfo, gid string) bool {
 	return err == nil
 }
 
+// handleSSH runs in the guest and receives commands over SSH from the
+// host. NB: can be invoked from two places: HandleSSH and Run. It's not
+// clear to me which path happens when. TODO(rjk): This function might be
+// better subdivided.
 func (g *Guest) handleSSH(ctx context.Context, s ssh.Session, l *yamux.Session) {
-	g.L.Info("handling ssh")
+	g.L.Info("handling ssh", "ssh.Session", s, "mux", l)
 
 	var info types.MSLInfo
+	var authinfo types.AuthInfo
 
 	sp := &specs.Process{
 		Env: []string{
@@ -286,6 +292,8 @@ func (g *Guest) handleSSH(ctx context.Context, s ssh.Session, l *yamux.Session) 
 
 	var console, smartClient bool
 
+	// We ship data to here via ssh environment variables. Is this a good
+	// transport for security-sensitive content?
 	for _, str := range s.Environ() {
 		if str == "ISLE_CONSOLE=1" {
 			console = true
@@ -301,6 +309,13 @@ func (g *Guest) handleSSH(ctx context.Context, s ssh.Session, l *yamux.Session) 
 			case "_MSL_INFO":
 				smartClient = true
 				json.Unmarshal([]byte(val), &info)
+				continue
+			case "_AUTH_DATA":
+				// TODO(rjk): I had hoped for a way to remove this from the env but
+				// there's no obvious way to do this without modifying the ssh package.
+				// The high-road scheme for this would be to use SendRequest from the ssh
+				// package?
+				json.Unmarshal([]byte(val), &authinfo)
 				continue
 			}
 		}
@@ -341,6 +356,8 @@ func (g *Guest) handleSSH(ctx context.Context, s ssh.Session, l *yamux.Session) 
 		return
 	}
 
+	// TODO(rjk): We lock up the terminal on the first invocation of linux.
+	// Is it here?
 	ptyReq, winCh, isPty := s.Pty()
 	if isPty {
 		sp.Terminal = true
@@ -362,16 +379,18 @@ func (g *Guest) handleSSH(ctx context.Context, s ssh.Session, l *yamux.Session) 
 		}
 	}
 
-	// TODO(rjk): Perhaps this is where additional auth date would need to be added for GCR.
 	cinfo := ContainerInfo{
 		Name:    info.Name,
 		Img:     imgref,
 		Status:  setup,
 		Width:   width,
 		Session: l,
+
+		AuthInfo: authinfo,
 	}
 
-	// Perhaps it's racy.
+	// Launching the container might be racy because the time isn't synced
+	// yet. Try once and then retry a few times below.
 	id, err := g.Container(ctx, &cinfo)
 	if err != nil {
 		g.L.Error("error establishing container on 0th attempt", "error", err)
@@ -382,12 +401,12 @@ func (g *Guest) handleSSH(ctx context.Context, s ssh.Session, l *yamux.Session) 
 	for i, td := range waitings {
 		timer := time.NewTimer(td)
 		<-timer.C
-	
+
 		id, err = g.Container(ctx, &cinfo)
 		if err != nil {
 			g.L.Error("error establishing container", "attempt", i+1, "error", err)
-			
-			if i == len(waitings) - 1 {
+
+			if i == len(waitings)-1 {
 				g.L.Error("giving up, too many failed attempts")
 				s.Exit(1)
 				return
@@ -600,6 +619,9 @@ func (g *Guest) setupSnapshot(ctx context.Context, id string, i containerd.Image
 	return snapId, nil
 }
 
+// HandleSSH pulls the in-guest container, configures it and connects to
+// shell running inside the in-guest container. This is a top-level function.
+// This functions lists to commands (over a SSH channel) from the host.
 func (g *Guest) HandleSSH(ctx context.Context, c net.Conn) {
 	_, key, err := ed25519.GenerateKey(
 		hkdf.New(sha256.New, []byte("isle rocks"), []byte("salty"), nil),
@@ -651,6 +673,7 @@ func (g *Guest) Run(ctx context.Context, l *yamux.Session) error {
 
 	var data []byte
 
+	// TODO(rjk): I'd like to understand why we put things in a key-val store.
 	err := g.getVar("ssh-key", &data)
 	if err == nil {
 		key, _ = x509.ParsePKCS1PrivateKey(data)

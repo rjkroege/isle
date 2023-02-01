@@ -53,18 +53,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	/*
-		ref, err := name.ParseReference("ubuntu")
-		if err != nil {
-			panic(err)
-		}
-
-		err = g.StartContainer(ctx, "ubuntu", ref)
-
-		g.L.Info("started container", "error", err)
-		os.Exit(0)
-	*/
-
 	g.L.Info("detected user name", "name", vars["user_name"])
 
 	vcfg := &vsock.Config{}
@@ -75,6 +63,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	// handleListen go routine listens to messages from the host.
 	go handleListen(ctx, g, vl)
 
 	for {
@@ -101,6 +90,7 @@ func main() {
 	g.Cleanup(ctx)
 }
 
+// handleListen listens to messages from the host.
 func handleListen(ctx context.Context, g *guest.Guest, l net.Listener) {
 	for {
 		c, err := l.Accept()
@@ -110,10 +100,12 @@ func handleListen(ctx context.Context, g *guest.Guest, l net.Listener) {
 		}
 		g.L.Info("accepted vsock")
 
+		// Listen side (as in receives messages from the host.)
 		go g.HandleSSH(ctx, c)
 	}
 }
 
+// handleConn connects to the host.
 func handleConn(ctx context.Context, g *guest.Guest, c net.Conn) bool {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -126,6 +118,7 @@ func handleConn(ctx context.Context, g *guest.Guest, c net.Conn) bool {
 		return false
 	}
 
+	// Client side (sends messages to the host.)
 	err = g.Run(ctx, sess)
 
 	g.L.Info("run has stopped", "error", err)

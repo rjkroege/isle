@@ -48,6 +48,8 @@ var (
 )
 
 func main() {
+	// TODO(rjk): Something like Kong might make the command line code
+	// simpler?
 	pflag.Parse()
 
 	if *fVersion {
@@ -98,9 +100,6 @@ func main() {
 		err      error
 	)
 
-log.Warn("Hello")
-
-
 	if *fStateDir != "" {
 		stateDir, err = filepath.Abs(*fStateDir)
 		if err != nil {
@@ -120,6 +119,8 @@ log.Warn("Hello")
 		}
 	}
 
+	// TODO(rjk): Make sure that there's a way to edit the config file
+	// _before_ startup.
 	if stateDir == "" {
 		dir, err := os.UserConfigDir()
 		if err != nil {
@@ -165,14 +166,14 @@ log.Warn("Hello")
 		return
 	}
 
-	// is this where we build the state dir? I think so.
-	fmt.Println("setupStateDir would get called here", stateDir)
 	err = setupStateDir(log, stateDir)
 	if err != nil {
 		log.Error("error setting up state", "error", err)
 		os.Exit(1)
 	}
 
+	// TODO(rjk): Should create a config file before invoking the editor to
+	// write it?
 	err = vm.CheckConfig(log, configPath)
 	if err != nil {
 		log.Error("error checking configuration", "error", err.Error())
@@ -250,8 +251,6 @@ log.Warn("Hello")
 
 	ioutil.WriteFile(filepath.Join(stateDir, "recent"), []byte(*fName+"\n"), 0644)
 
-	fmt.Println("named", named.String())
-
 	c := &isle.CLI{
 		L:       log,
 		Path:    path,
@@ -274,7 +273,9 @@ log.Warn("Hello")
 
 var assetSuffix = "-" + runtime.GOARCH + ".tar.gz"
 
-// setupStateDir (maybe?) creates the ~/Library/Application Support/isle and populates it.
+// setupStateDir creates the ~/Library/Application Support/isle and
+// populates it. This sets up the guest. container will be downloaded
+// later.
 func setupStateDir(log hclog.Logger, stateDir string) error {
 	var neededFiles = map[string]struct{}{
 		"initrd":  {},
@@ -290,14 +291,10 @@ func setupStateDir(log hclog.Logger, stateDir string) error {
 		}
 	}
 
-	fmt.Println("setupStateDir before len", Version)
 	if len(neededFiles) == 0 {
 		if Version == "unknown" {
 			return nil
 		}
-
-		fmt.Println("setupStateDir before version check")
-
 
 		data, err := ioutil.ReadFile(filepath.Join(stateDir, "version"))
 		curVersion := strings.TrimSpace(string(data))
@@ -310,20 +307,17 @@ func setupStateDir(log hclog.Logger, stateDir string) error {
 		log.Warn("current version of state dir does not match CLI, switching version",
 			"current", curVersion, "expected", Version)
 	}
-	fmt.Println("setupStateDir after len")
 
 	os.MkdirAll(stateDir, 0755)
 
-	log.Warn("trying to use cached os bundle", "Version", Version, "assetSuffix", assetSuffix)
 	if cacheDir := os.Getenv("ISLE_CACHE_DIR"); cacheDir != "" {
 		name := "os-" + Version + assetSuffix
 
 		path := filepath.Join(cacheDir, name)
-		log.Warn("trying to use cached os bundle", "path", path)
 
 		f, err := os.Open(path)
 		if err == nil {
-			log.Warn("using cached os bundle", "path", path)
+			log.Info("using cached os bundle", "path", path)
 			defer f.Close()
 
 			ioutil.WriteFile(filepath.Join(stateDir, "version"), []byte(Version), 0644)
@@ -335,7 +329,6 @@ func setupStateDir(log hclog.Logger, stateDir string) error {
 			return ghrelease.Unpack(f, size, name, stateDir)
 		}
 	}
-	fmt.Println("setupStateDir after cacheDir")
 
 	var rel *ghrelease.Release
 
@@ -393,7 +386,13 @@ func startVM(log hclog.Logger, stateDir, configPath, pidPath string) {
 		r, w := io.Pipe()
 
 		go func() {
+			// TODO(rjk): This runs code here _in the guest_ but not in
+			// the container. Consider generalizing for debugging?
 			time.Sleep(5 * time.Second)
+			// First, show all the output that's been generated previously. This is
+			// necessary to make sure that we can see all of the guest's log output.
+			fmt.Fprintf(w, "\ncat /var/log/isle-guest.log\n")
+			// Then show all of the subsequent output.
 			fmt.Fprintf(w, "\ntail -f /var/log/isle-guest.log\n")
 		}()
 
@@ -453,7 +452,7 @@ func startVM(log hclog.Logger, stateDir, configPath, pidPath string) {
 	errCh := make(chan error, 1)
 	stateCh := make(chan vm.State, 1)
 
-// By this point, I will have installed a virtual machine image.
+	// By this point, I will have installed a virtual machine image.
 	go func() {
 		defer os.Remove(pidPath)
 		errCh <- v.Run(ctx, stateCh, sig)

@@ -24,6 +24,7 @@ import (
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/oci"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -32,12 +33,11 @@ import (
 	"github.com/lab47/isle/pkg/clog"
 	"github.com/lab47/isle/pkg/progressbar"
 	"github.com/lab47/isle/pkg/shardconfig"
+	"github.com/lab47/isle/types"
 	"github.com/rs/xid"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
-
-// I believe that this file is partially vendored out of https://github.com/opencontainers/runc
 
 const basePath = "/data/containers"
 
@@ -146,22 +146,6 @@ func (g *Guest) CleanupContainer(ctx context.Context, id string) {
 	}
 }
 
-func (g *Guest) lookupContainer(ctx context.Context, name string) (containerd.Container, error) {
-	if !g.isleExists(name) {
-		return nil, fmt.Errorf("unknown isle requested: %s", name)
-	}
-
-	id, err := g.Container(ctx, &ContainerInfo{
-		Name: name,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return g.C.LoadContainer(ctx, id)
-}
-
 func (g *Guest) oneAndOnlyIsle() string {
 	entries, err := os.ReadDir(basePath)
 	if err != nil {
@@ -175,7 +159,7 @@ func (g *Guest) oneAndOnlyIsle() string {
 	return entries[0].Name()
 }
 
-// Container fires up a container?
+// Container fires up a container.
 func (g *Guest) Container(ctx context.Context, info *ContainerInfo) (string, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -262,22 +246,27 @@ type ContainerInfo struct {
 	Config *shardconfig.Config
 
 	OCIConfig *v1.Config
+
+	// Configuration for basic auth.
+	AuthInfo types.AuthInfo
 }
 
-// bundlePath is the container definition?
+// unpackImg fetches and unpacks a remote image.
 func (g *Guest) unpackImg(
 	ctx context.Context,
 	img name.Reference,
 	bundlePath string,
 	status io.Writer,
 	width int,
+	remoteauth authn.Authenticator,
 ) (*v1.Config, error) {
-fmt.Println("unpackImg")
+	// Fetches a remote image if necessary.
 	rimg, err := remote.Image(img,
 		remote.WithPlatform(v1.Platform{
 			Architecture: runtime.GOARCH,
 			OS:           "linux",
 		}),
+		remote.WithAuth(remoteauth),
 	)
 	if err != nil {
 		return nil, err
@@ -408,8 +397,8 @@ var devCharEntries = []devEntry{
 
 var ErrUnknownContainer = errors.New("unknown container")
 
-// bootContainer starts the desired container as the inner-guest. Remember that this code
-// is running in the outer-guest.
+// bootContainer starts the desired container as the inner-guest.
+// Remember that this code is running in the outer-guest.
 func (g *Guest) bootContainer(
 	ctx context.Context,
 	name string,
@@ -438,6 +427,8 @@ func (g *Guest) bootContainer(
 
 	os.MkdirAll("/run/share", 0755)
 
+// This is an open containers specification. Per
+// https://github.com/opencontainers/runtime-spec/blob/main/specs-go/config.go
 	s := specs.Spec{
 		Version: "1.0.2-dev",
 		Process: &specs.Process{
@@ -630,6 +621,7 @@ func (g *Guest) bootContainer(
 		},
 	}
 
+	// Set up options for containerd.
 	var opts []containerd.NewContainerOpts
 	opts = append(opts,
 		containerd.WithNewSpec(
@@ -669,6 +661,7 @@ func (g *Guest) bootContainer(
 
 	client := g.C
 
+	g.L.Debug("bootContainer: about to actually create a container")
 	container, err := client.NewContainer(ctx, id, opts...)
 	if err != nil {
 		return err
@@ -814,19 +807,25 @@ func (g *Guest) isleExists(name string) bool {
 	return err == nil && fi.IsDir()
 }
 
-// SetupIsle loads (?) the guest image.
+// SetupIsle downloads the container image and sets it up.
+// TODO(rjk): Arguably, this function is misnamed. Consider calling it "PullContainer"?
 func (g *Guest) SetupIsle(
 	ctx context.Context,
 	name string,
 	img name.Reference,
 	status io.Writer,
 	width int,
+	remoteauth authn.Authenticator,
 ) error {
 	bundlePath := filepath.Join(basePath, name)
 	rootFsPath := filepath.Join(bundlePath, "rootfs")
 
+	g.L.Debug("SetupIsle", "bundlePath", bundlePath, "rootFsPath", rootFsPath)
+
 	if _, err := os.Stat(rootFsPath); err != nil {
-		_, err = g.unpackImg(ctx, img, bundlePath, status, width)
+		g.L.Debug("SetupIsle no ", "rootFsPath", rootFsPath)
+		_, err = g.unpackImg(ctx, img, bundlePath, status, width, remoteauth)
+		g.L.Debug("after unpackImg", "err", err)
 		if err != nil {
 			return err
 		}
@@ -925,20 +924,34 @@ func (g *Guest) setupContainer(ctx context.Context, task containerd.Task, bundle
 	return nil
 }
 
-// StartContainer launches the inner-guest container.
+// StartContainer first pulls if necessary, configures and then launches
+// the in-guest container.
 func (g *Guest) StartContainer(
 	ctx context.Context,
 	info *ContainerInfo,
 	id string,
 ) error {
 	name := info.Name
+	g.L.Debug("StartContainer", "info", *info, "id", id, "name", name)
+	defer g.L.Debug("StartContainer end")
 
 	if !g.isleExists(name) {
+		g.L.Debug("if branch inside StartContainer")
 		if info.Img == nil {
 			return fmt.Errorf("unable to create new isle, no image specified")
 		}
 
-		err := g.SetupIsle(ctx, name, info.Img, info.Status, info.Width)
+		authenticator := authn.Anonymous
+		if info.AuthInfo.Username != "" {
+			authenticator = &authn.Basic{
+				Username: info.AuthInfo.Username,
+				Password: info.AuthInfo.Password,
+			}
+		}
+
+		//  The pulling of the container is actually in SetupIsle.
+		err := g.SetupIsle(ctx, name, info.Img, info.Status, info.Width, authenticator)
+		g.L.Debug("if branch inside StartContainer, after SetupIsle", "err", err)
 		if err != nil {
 			return err
 		}
@@ -947,6 +960,7 @@ func (g *Guest) StartContainer(
 			return g.setupContainer(ctx, task, filepath.Join(basePath, name))
 		})
 	} else {
+		g.L.Debug("else branch inside StartContainer")
 		return g.bootContainer(ctx, info.Name, id, info.StartCh, nil)
 	}
 }

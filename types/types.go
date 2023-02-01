@@ -56,3 +56,8 @@ type MSLInfo struct {
 	UserName string `json:"user_name"`
 	UserId   int    `json:"user_id"`
 }
+
+type AuthInfo struct {
+	Username string `json:"user_name"`
+	Password string `json:"password"`
+}

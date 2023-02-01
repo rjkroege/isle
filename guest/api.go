@@ -20,7 +20,8 @@ func (g *Guest) startAPI(ctx context.Context) error {
 
 	guestapi.RegisterGuestAPIServer(serv, g)
 
-	g.L.Info("starting api listener")
+	g.L.Info("startAPI: starting api listener")
+	defer g.L.Info("startAPI finished")
 
 	li, err := net.Listen("tcp", "0.0.0.0:1212")
 	if err != nil {

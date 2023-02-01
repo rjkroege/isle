@@ -41,7 +41,7 @@ require (
 	github.com/schollz/progressbar/v3 v3.8.6
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.8.0
 	github.com/twitchtv/twirp v8.1.2+incompatible
 	github.com/vishvananda/netlink v1.1.1-0.20220125195016-0639e7e787ba
 	github.com/zclconf/go-cty v1.8.0
@@ -87,6 +87,7 @@ require (
 	github.com/hashicorp/go-safetemp v1.0.0 // indirect
 	github.com/hashicorp/go-version v1.2.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	github.com/keybase/go-keychain v0.0.0-20221221221913-9be78f6c498b // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mdlayher/socket v0.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
@@ -112,5 +113,5 @@ require (
 	google.golang.org/api v0.56.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220126215142-9970aeb2e350 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
