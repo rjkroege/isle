@@ -880,6 +880,8 @@ func (g *Guest) setupContainer(ctx context.Context, task containerd.Task, bundle
 		"test -e /bin/bash && sed -i -e 's|/bin/sh|/bin/bash|' /etc/default/useradd",
 		"id %user || useradd -u 501 -m %user",
 		"echo %user:%user | chpasswd",
+		"echo '%user:100000:65536' > /etc/subuid",
+		"echo '%user:100000:65536' > /etc/subgid",
 		"stat /home/%user/mac || ln -sf /share/home /home/%user/mac",
 	)
 
