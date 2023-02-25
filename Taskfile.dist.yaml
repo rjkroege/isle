@@ -64,13 +64,15 @@ tasks:
       - task: guestimage
 
   # Convenience to respin the world.
-  install:
+  testing:
     deps: [ guestimage ]
     cmds:
       - ./bin/linux --state-dir $home/wrks/islestate --stop || true
       - rm -rf $home/wrks/islestate/*
       - cp -c os-unknown-arm64.tar.gz $ISLE_CACHE_DIR
 
-  tester:
+  install:
+    deps: [ build ]
     cmds:
-      - echo  {{trimPrefix .HOME .ROOT_DIR }}  {{.ROOT_DIR}} /home/{{.USER}}/mac{{trimPrefix .HOME .ROOT_DIR }} 
+      - cp ./bin/linux /usr/local/bin
+   
