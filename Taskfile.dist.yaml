@@ -25,7 +25,8 @@ tasks:
   # Don't forget to shutdown the VM if its running
   clean:
     cmds:
-      - rm -rf os/isle-guest os/isle-helper os/containerd-clog-logger
+      - ./bin/linux --stop || true
+      - rm -rf os/isle-guest os/isle-helper os/containerd-clog-logger os/resolve.conf
 
   # TODO(rjk): make sure that it can build from a cold start
   guestimage:
@@ -36,16 +37,16 @@ tasks:
     platforms: [ darwin ]
     cmds:
       - echo 'running on darwin'
-      # TODO(rjk): isle should support this cleanly.
+      # TODO(rjk): Start the image up in some clean way.
       # - ./bin/linux --state-dir $home/wrks/islestate -i ghcr.io/rjkroege/debslim --bg-start
-      # TODO(rjk): fix the paths.
-      - ./bin/linux -d /home/rjkroege/mac/tools/_builds/isle 'task guestimage-linux'
+      - ./bin/linux -d /home/{{.USER}}/mac{{trimPrefix .HOME .ROOT_DIR }}  'task guestimage-linux'
 
   guestimage-linux:
     platforms: [ linux ]
     cmds:
       - echo 'running on linux'
       - sudo buildah rm mgcontainer || true
+      - cp /etc/resolv.conf ./os
       - cd os ; sudo  buildah bud --layers=true  -t makeguest
       - sudo buildah from --name mgcontainer makeguest
       - task: guestimage-linux-extract
@@ -69,3 +70,7 @@ tasks:
       - ./bin/linux --state-dir $home/wrks/islestate --stop || true
       - rm -rf $home/wrks/islestate/*
       - cp -c os-unknown-arm64.tar.gz $ISLE_CACHE_DIR
+
+  tester:
+    cmds:
+      - echo  {{trimPrefix .HOME .ROOT_DIR }}  {{.ROOT_DIR}} /home/{{.USER}}/mac{{trimPrefix .HOME .ROOT_DIR }} 

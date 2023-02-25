@@ -49,17 +49,15 @@ COPY isle-guest /wd/rootfs/usr/sbin
 # Unpack and prep the kernel.
 RUN tar -C /wd/rootfs -xf /wd/tmp/kernel.tar.xz 
 
-RUN ls -lR  /wd/rootfs/boot/vmlinuz-*
-
-RUN which gunzip
-RUN gunzip --help
+# Debugging
+# RUN ls -lR  /wd/rootfs/boot/vmlinuz-*
+# RUN which gunzip
+# RUN gunzip --help
 
 WORKDIR /wd/rootfs/boot
 
-RUN ls -l
-
-
-RUN ls -lR  /wd/rootfs/boot/vmlinuz-*
+# RUN ls -l
+# RUN ls -lR  /wd/rootfs/boot/vmlinuz-*
 RUN gunzip -c vmlinuz-* > /wd/release/vmlinux
 RUN rm -rf /wd/rootfs/boot/vmlinu*
 
@@ -67,7 +65,7 @@ RUN rm -rf /wd/rootfs/boot/vmlinu*
 RUN KERNEL_VERSION=$(ls /wd/rootfs/lib/modules | head -n 1); \
 	chroot /wd/rootfs /sbin/depmod -ae -F /boot/System.map-$KERNEL_VERSION $KERNEL_VERSION
 
-RUN ls -lR /wd/rootfs > /wd/logging.txt
+# RUN ls -lR /wd/rootfs > /wd/logging.txt
 
 # Build fs
 RUN mksquashfs /wd/rootfs /wd/release/os.fs -comp xz
