@@ -1,0 +1,71 @@
+version: '3'
+
+# Starting point of building stuffs.
+tasks:
+  build:
+    cmds:
+      - GOOS=darwin go build -o bin/linux ./cmd/linux
+      - codesign --entitlements linux.entitlements -s - ./bin/linux || true
+
+  guestcmds:
+    deps: [isle-guest, containerd-clog-logger, isle-helper]
+
+  isle-guest:
+    cmds:
+      - GOOS=linux CGO_ENABLED=0 go build -o os/isle-guest ./cmd/isle-guest
+
+  containerd-clog-logger:
+    cmds:
+      - GOOS=linux CGO_ENABLED=0 go build -o os/containerd-clog-logger ./pkg/clog/containerd-clog-logger
+
+  isle-helper:
+    cmds:
+      - GOOS=linux CGO_ENABLED=0 go build -o os/isle-helper ./cmd/isle-helper
+
+  # Don't forget to shutdown the VM if its running
+  clean:
+    cmds:
+      - rm -rf os/isle-guest os/isle-helper os/containerd-clog-logger
+
+  # TODO(rjk): make sure that it can build from a cold start
+  guestimage:
+    deps: [ build, guestcmds, guestimage-darwin, guestimage-linux ]
+
+  # TODO(rjk): debslim needs task installed.
+  guestimage-darwin:
+    platforms: [ darwin ]
+    cmds:
+      - echo 'running on darwin'
+      # TODO(rjk): isle should support this cleanly.
+      # - ./bin/linux --state-dir $home/wrks/islestate -i ghcr.io/rjkroege/debslim --bg-start
+      # TODO(rjk): fix the paths.
+      - ./bin/linux -d /home/rjkroege/mac/tools/_builds/isle 'task guestimage-linux'
+
+  guestimage-linux:
+    platforms: [ linux ]
+    cmds:
+      - echo 'running on linux'
+      - sudo buildah rm mgcontainer || true
+      - cd os ; sudo  buildah bud --layers=true  -t makeguest
+      - sudo buildah from --name mgcontainer makeguest
+      - task: guestimage-linux-extract
+
+  guestimage-linux-extract:
+    platforms: [ linux ]
+    vars:
+      MKG:
+        sh: sudo buildah mount mgcontainer
+    cmds:
+      - sudo cp {{.MKG}}/wd/os-unknown-arm64.tar.gz  .
+
+  default:
+    cmds:
+      - task: guestimage
+
+  # Convenience to respin the world.
+  install:
+    deps: [ guestimage ]
+    cmds:
+      - ./bin/linux --state-dir $home/wrks/islestate --stop || true
+      - rm -rf $home/wrks/islestate/*
+      - cp -c os-unknown-arm64.tar.gz $ISLE_CACHE_DIR

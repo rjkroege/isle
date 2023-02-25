@@ -43,7 +43,8 @@ RUN sh -c "echo \"macstorage:x:147:100:For external file access,,,:/tmp:/sbin/no
 RUN sh -c "echo \"macstorage:!::0:::::\" >> \"/wd/rootfs/etc/shadow\""
 
 # Add the special guest apps.
-COPY isle-* /wd/rootfs/usr/sbin
+COPY isle-helper /wd/rootfs/usr/bin
+COPY isle-guest /wd/rootfs/usr/sbin
 
 # Unpack and prep the kernel.
 RUN tar -C /wd/rootfs -xf /wd/tmp/kernel.tar.xz 
