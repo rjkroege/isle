@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"text/template"
 	"time"
 
 	"github.com/containerd/containerd"
@@ -381,19 +382,15 @@ type isleInfo struct {
 }
 
 type devEntry struct {
-	name         string
-	major, minor int
+	Name         string
+	Major, Minor int
 }
 
-var devCharEntries = []devEntry{
-	{"null", 1, 3},
-	{"full", 1, 7},
-	{"ptmx", 5, 2},
-	{"random", 1, 8},
-	{"urandom", 1, 9},
-	{"tty", 5, 0},
-	{"zero", 1, 5},
+type containerSetup struct {
+	User string
+	DevEntries []devEntry
 }
+
 
 var ErrUnknownContainer = errors.New("unknown container")
 
@@ -854,53 +851,58 @@ func (g *Guest) SetupIsle(
 	return err
 }
 
+const containersetupscript = `
+rm -rf /var/run
+ln -s /run /var/run
+mkdir -p /dev/char
+{{range .DevEntries}}
+	ln -sf /dev/{{.Name}} /dev/char/{{.Major}}:{{.Minor}}
+{{end}}
+mkdir -p /etc/sudoers.d
+echo '{{.User}} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/00-{{.User}}
+echo root:root | chpasswd
+test -e /bin/bash && sed -i -e 's|/bin/sh|/bin/bash|' /etc/default/useradd
+id {{.User}} || useradd -u 501 -m {{.User}}
+echo {{.User}}:{{.User}} | chpasswd
+echo '{{.User}}:100000:65536' > /etc/subuid
+echo '{{.User}}:100000:65536' > /etc/subgid
+stat /home/{{.User}}/mac || ln -sf /share/home /home/{{.User}}/mac
+`
+
 func (g *Guest) setupContainer(ctx context.Context, task containerd.Task, bundlePath string) error {
-	setup := []string{
-		// We need be sure that /var/run is mapped to /run because
-		// we mount /run under the host's /run so that it can be
-		// accessed by the host.
-		"rm -rf /var/run; ln -s /run /var/run",
-		"mkdir -p /dev/char",
+	containerParms := containerSetup{
+	User: g.User,
+	DevEntries: []devEntry{
+	{"null", 1, 3},
+	{"full", 1, 7},
+	{"ptmx", 5, 2},
+	{"random", 1, 8},
+	{"urandom", 1, 9},
+	{"tty", 5, 0},
+	{"zero", 1, 5},
+	},
 	}
 
-	for _, ent := range devCharEntries {
-		setup = append(setup, fmt.Sprintf(
-			"ln -sf /dev/%s /dev/char/%d:%d", ent.name, ent.major, ent.minor,
-		))
-	}
-
-	// TODO(rjk): This adds authentication to the container. It assumes that presence of
-	// Debian/Ubuntu style password management. Maybe there needs to be a way to
-	// configure this?
-	setup = append(setup,
-		"mkdir -p /etc/sudoers.d",
-		"echo '%user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/00-%user",
-		"echo root:root | chpasswd",
-		// A little useradd house keeping to default to bash if possible
-		"test -e /bin/bash && sed -i -e 's|/bin/sh|/bin/bash|' /etc/default/useradd",
-		"id %user || useradd -u 501 -m %user",
-		"echo %user:%user | chpasswd",
-		"echo '%user:100000:65536' > /etc/subuid",
-		"echo '%user:100000:65536' > /etc/subgid",
-		"stat /home/%user/mac || ln -sf /share/home /home/%user/mac",
-	)
-
-	repl := strings.NewReplacer("%user", g.User)
-
-	for i, str := range setup {
-		setup[i] = repl.Replace(str)
+	var t = template.Must(template.New("setupscript").Parse(containersetupscript))
+	sb := new(strings.Builder)
+	if err := t.Execute(sb, containerParms); err != nil {
+		g.L.Info("can't expand containersetupscript:", "error", err)
+		return err
 	}
 
 	var setupSp specs.Process
-	setupSp.Args = []string{"/bin/sh", "-c", strings.Join(setup, "; ")}
+	setupSp.Args = []string{"/bin/sh", "-c", sb.String()}
 	setupSp.Env = []string{"PATH=/bin:/sbin:/usr/bin:/usr/sbin:/opt/isle/bin"}
 	setupSp.Cwd = "/"
 
-	g.L.Info("running container setup")
+	g.L.Info("running container setup", "setupSp.Args", setupSp.Args)
 
+// TODO(rjk): Where does this LogFile end up? It goes somewhere. And it
+// might be useful to see.
 	proc, err := task.Exec(ctx, "setup", &setupSp,
 		cio.LogFile(filepath.Join(bundlePath, "setup.out")))
 	if err != nil {
+		g.L.Warn("running container setup", "setupSp.Args", setupSp.Args)
 		return err
 	}
 
