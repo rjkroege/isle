@@ -26,7 +26,11 @@ tasks:
   clean:
     cmds:
       - ./bin/linux --stop || true
-      - rm -rf os/isle-guest os/isle-helper os/containerd-clog-logger os/resolve.conf
+      - rm -rf os/isle-guest \
+        os/isle-helper \
+        os/containerd-clog-logger \
+        os/resolv.conf os/logging.txt \
+        os-unknown-arm64.tar.gz
 
   # TODO(rjk): make sure that it can build from a cold start
   guestimage:
