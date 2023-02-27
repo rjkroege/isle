@@ -859,11 +859,19 @@ mkdir -p /dev/char
 	ln -sf /dev/{{.Name}} /dev/char/{{.Major}}:{{.Minor}}
 {{end}}
 mkdir -p /etc/sudoers.d
-echo '{{.User}} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/00-{{.User}}
-echo root:root | chpasswd
-test -e /bin/bash && sed -i -e 's|/bin/sh|/bin/bash|' /etc/default/useradd
-id {{.User}} || useradd -u 501 -m {{.User}}
-echo {{.User}}:{{.User}} | chpasswd
+if [ -x /usr/bin/apt-cache ]; then
+	echo '{{.User}} ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/00-{{.User}}
+	echo root:root | chpasswd
+	test -e /bin/bash && sed -i -e 's|/bin/sh|/bin/bash|' /etc/default/useradd
+	id {{.User}} || useradd -u 501 -m {{.User}}
+	echo {{.User}}:{{.User}} | chpasswd
+else
+	# Alpine
+	echo '{{.User}} ALL=(ALL) ALL' >> /etc/sudoers
+	adduser -D -g '' {{.User}}
+	adduser {{.User}} wheel
+	passwd -d {{.User}}
+fi
 echo '{{.User}}:100000:65536' > /etc/subuid
 echo '{{.User}}:100000:65536' > /etc/subgid
 stat /home/{{.User}}/mac || ln -sf /share/home /home/{{.User}}/mac

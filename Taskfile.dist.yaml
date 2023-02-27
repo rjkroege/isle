@@ -36,7 +36,6 @@ tasks:
   guestimage:
     deps: [ build, guestcmds, guestimage-darwin, guestimage-linux ]
 
-  # TODO(rjk): debslim needs task installed.
   guestimage-darwin:
     platforms: [ darwin ]
     cmds:
@@ -68,6 +67,7 @@ tasks:
       - task: guestimage
 
   # Convenience to respin the world.
+  # TODO(rjk): Could use something in /tmp (like Makefile?)
   testing:
     deps: [ guestimage ]
     cmds:
