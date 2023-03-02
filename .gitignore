@@ -5,3 +5,6 @@
 
 os/isle-guest
 os/isle-helper
+os/containerd-clog-logger
+os/resolv.conf
+os-unknown-arm64.tar.gz
